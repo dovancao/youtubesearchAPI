@@ -1,44 +1,65 @@
-$( document ).ready(function(){
-$("#search").submit(function(e){
-    e.preventDefault();
-    $("#result-list").empty();
-    let searchTerm = $('#keyword').val();
-    if(!searchTerm){
-        $("#loader").hide();
-        return;
-    }
+let isLoading = false;
 
-    let url = "https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=25&q=" +searchTerm+"&key=AIzaSyA9gQZ-oYomFypZN7PsupZJtOfQqA6Q3qw";
-    $.ajax({
-        url: url,
-        type: 'GET',
-        dataType: 'json',
-        contentType: "application/json; charset=utf-8",
-        async: false,
-        success: function(data, status, jqXHR){
-            console.log(data);
-            $("#result-list").html();
-            let items = data.items;
-            if(items.length){
-                $(items).each(function(index,item){
-    
-                    $("#result-list").append(
-                        $('<a/>')
-                            .addClass('result col-md-12').attr('href',`https://youtube.com/watch?v=${item.id.videoId}?autoplay=true`).attr('target','_blank')
-                            .append(`<img src="${item.snippet.thumbnails.medium.url}" height="${item.snippet.thumbnails.medium.height}" width="${item.snippet.thumbnails.medium.width}">`)
-                            .append($('<div/>'))
-                                .addClass('video_info')
-                                .append(`<h2 class='title'>${item.snippet.title}</h2>`,`<p class="description">${item.snippet.description}</p>`,`<span>View>></span>`)
-                        )
-                })
-            }
-                
-        },
-        error: function(response){
-            console.log("Error",response);
+$(document).ready(function(){
+    let nextPage;
+    let timeOut;
+
+    $("#keyword").on('input', (e) => {
+        e.preventDefault();
+
+        $("#loading").css("opacity", "1");
+
+        clearTimeout(timeOut);
+        timeOut = setTimeout(async () => {
+            let keyword = $("#keyword").val();
+            let searchResult = await search(keyword, nextPage);
+            nextPage = searchResult.nextPageToken ? searchResult.nextPageToken : null;
+            $("#result-list").empty();
+            processResult(searchResult);
+        }, 1000);
+    });
+
+    $(window).on("scroll", function(){
+        if($(window).scrollTop() + $(window).height() >= $(document).height() - 100) {
+            if(nextPage && !isLoading) {
+                isLoading = true;
+
+                $("#loading").css("opacity", "1");
+
+                clearTimeout(timeOut);
+                timeOut = setTimeout(async () => {
+                    let keyword = $("#keyword").val();
+                    let searchResult = await search(keyword, nextPage);
+                    nextPage = searchResult.nextPageToken ? searchResult.nextPageToken : null;
+                    processResult(searchResult);
+                }, 1000);
+            } else if(!isLoading && !nextPage) $("#result-list").append("<h2>Nothing more to show!</h2>");
         }
-    })
-})
+    });
 });
 
-console.log($("#search"))
+function search(keyword, nextPage) {
+    return $.ajax({
+        url: `https://www.googleapis.com/youtube/v3/search?pageToken=${nextPage ? nextPage : ''}&type=video&part=snippet&maxResults=25&q=${keyword}&key=AIzaSyA9gQZ-oYomFypZN7PsupZJtOfQqA6Q3qw`,
+        type: 'GET'
+    });
+}
+
+function processResult(results) {
+
+    listHTML = results.items.map(item => {
+        return `<a class="result col-md-12" href="https://www.youtube.com/watch?v=${item.id.videoId}?autoplay=true" target="_blank">
+            <img src="${item.snippet.thumbnails.high.url}" alt="">
+            <div class="video_info">
+                <h2 class="title">${item.snippet.title}</h2>
+                <p class="description">${item.snippet.description}</p>
+                <span>View >></span>
+            </div>
+        </a>`;
+    });
+
+    $("#result-list").append(listHTML.join(""));
+
+    $("#loading").css("opacity", "0");
+    isLoading = false;
+}
